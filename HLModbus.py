@@ -1,4 +1,8 @@
 # coding:utf-8
+'''
+Modbus RTU Master and Slave in python3
+created:winxos 20191219
+'''
 from threading import Thread
 from queue import Queue
 from enum import Enum, auto
@@ -27,6 +31,12 @@ modbus_crc_table = [
 
 
 def ModbusCheckCalc(n: bytes, sz):
+    '''
+    Modbus CRC16 calculate
+    :param n: data in bytes
+    :param sz: calculate index from 0 to sz-1
+    :return: CRC16
+    '''
     crc = 0xFFFF
     for i in range(sz):
         tmp = n[i] ^ crc
@@ -51,6 +61,7 @@ class ModbusMaster(Thread):
         self.timeout_ticks = 0
         self.sending_addr = 0
         self.sending_cmd = 0
+        self.TIMEOUT_TICKS = 20
         self.start()
 
     @staticmethod
@@ -67,17 +78,46 @@ class ModbusMaster(Thread):
         _buf[7] = check // 256
         return _buf
 
-    def read_registers(self, addr, start, count, success, fail):
+    def read_registers(self, addr, start, count, s, f) -> None:
+        '''
+        0x03 function
+        :param s: success callback
+        :param f: fail callback
+        '''
         tx = self.__build_frame(addr, 0x03, start, count)
-        self._tx_q.put((tx, success, fail))
+        self._tx_q.put((tx, s, f))
 
-    def write_register(self, addr, start, value, success, fail):
-        pass
+    def write_register(self, addr, start, value, s, f):
+        '''
+        0x06 function
+        :param s: success callback
+        :param f: fail callback
+        '''
+        tx = self.__build_frame(addr, 0x06, start, value)
+        self._tx_q.put((tx, s, f))
 
-    def write_registers(self, addr, start, count, data: bytes, success, fail):
-        pass
+    def write_registers(self, addr, start, count, data: bytes, s, f) -> None:
+        '''
+        0x10 function
+        :param data: bytes
+        :param s: success callback
+        :param f: fail callback
+        '''
+        tx = bytearray(count*2 + 9)
+        tx[:5] = self.__build_frame(addr, 0x10, start, count)[:5]
+        ds = count * 2
+        tx[6] = ds
+        tx[7:7+ds] = data[:ds]
+        check = ModbusCheckCalc(tx, 7 + ds)
+        tx[7+ds] = check % 256
+        tx[8+ds] = check // 256
+        self._tx_q.put((tx, s, f))
 
     def receive(self, n: bytes) -> None:
+        '''
+        call this while received data
+        :param n: bytes
+        '''
         if self.state == self.State.SENDING:
             if len(n) < 4:
                 return
@@ -89,6 +129,10 @@ class ModbusMaster(Thread):
                 self.fail_cb(1)
 
     def set_sender(self, func):
+        '''
+        set modbus tx send implement
+        :param func: type function(bytes)
+        '''
         self.send = func
 
     def run(self) -> None:
