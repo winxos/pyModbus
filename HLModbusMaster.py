@@ -1,8 +1,8 @@
 # coding:utf-8
-'''
+"""
 Modbus RTU Master and Slave in python3
 created:winxos 20191219
-'''
+"""
 from threading import Thread
 from queue import Queue
 from enum import Enum, auto
@@ -31,12 +31,12 @@ modbus_crc_table = [
 
 
 def ModbusCheckCalc(n: bytes, sz):
-    '''
+    """
     Modbus CRC16 calculate
     :param n: data in bytes
     :param sz: calculate index from 0 to sz-1
     :return: CRC16
-    '''
+    """
     crc = 0xFFFF
     for i in range(sz):
         tmp = n[i] ^ crc
@@ -79,30 +79,30 @@ class ModbusMaster(Thread):
         return _buf
 
     def read_registers(self, addr, start, count, s, f) -> None:
-        '''
+        """
         0x03 function
         :param s: success callback
         :param f: fail callback
-        '''
+        """
         tx = self.__build_frame(addr, 0x03, start, count)
         self._tx_q.put((tx, s, f))
 
     def write_register(self, addr, start, value, s, f):
-        '''
+        """
         0x06 function
         :param s: success callback
         :param f: fail callback
-        '''
+        """
         tx = self.__build_frame(addr, 0x06, start, value)
         self._tx_q.put((tx, s, f))
 
     def write_registers(self, addr, start, count, data: bytes, s, f) -> None:
-        '''
+        """
         0x10 function
         :param data: bytes
         :param s: success callback
         :param f: fail callback
-        '''
+        """
         tx = bytearray(count*2 + 9)
         tx[:5] = self.__build_frame(addr, 0x10, start, count)[:5]
         ds = count * 2
@@ -114,10 +114,10 @@ class ModbusMaster(Thread):
         self._tx_q.put((tx, s, f))
 
     def receive(self, n: bytes) -> None:
-        '''
+        """
         call this while received data
         :param n: bytes
-        '''
+        """
         if self.state == self.State.SENDING:
             if len(n) < 4:
                 return
@@ -129,10 +129,10 @@ class ModbusMaster(Thread):
                 self.fail_cb(1)
 
     def set_sender(self, func):
-        '''
+        """
         set modbus tx send implement
         :param func: type function(bytes)
-        '''
+        """
         self.send = func
 
     def run(self) -> None:
@@ -156,10 +156,6 @@ class ModbusMaster(Thread):
                 else:
                     self.timeout_ticks -= 1
             sleep(0.001)  # 1ms per tick
-
-
-class ModbusSlave:
-    pass
 
 
 def fail(n):
