@@ -70,12 +70,26 @@ class ModbusSlave:
                     reg.write(reg.reg, reg.dev)
                     return True, 0
 
+    def deal(self, data: bytes):
+        if data[0] != 0x00 and data[0] != self.address:
+            return False
+        if data[1] == 0x03:
+            self.read_registers(data[2] * 256 + data[3], data[4] * 256 + data[5])
+
     def receive(self, data: bytes):
         """
         call this while received data
         :param data: bytes
         """
         pass
+
+    def receive_ascii(self, data: str):
+        if not data.startswith(":") or not data.endswith("\r\n") or len(data) % 2 == 0:
+            return False
+        mdata = bytearray.fromhex(data[1:-2])
+        if sum(mdata) % 0x100 != 0:
+            return False
+        self.deal(mdata[:-1])
 
 
 def rd(a, b):
@@ -99,6 +113,7 @@ def test():
     a = ModbusSlave(1, regs, s)
     a.read_registers(1, 1)
     a.write_registers(1, 2, [5, 6])
+    a.receive_ascii(":010300000001FB\r\n")
 
 
 if __name__ == '__main__':
