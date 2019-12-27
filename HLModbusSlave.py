@@ -84,6 +84,10 @@ class ModbusSlave:
         pass
 
     def receive_ascii(self, data: str):
+        """
+        modbus ascii protocol
+        :return: True/False, Value
+        """
         if not data.startswith(":") or not data.endswith("\r\n") or len(data) % 2 == 0:
             return False
         mdata = bytearray.fromhex(data[1:-2])
