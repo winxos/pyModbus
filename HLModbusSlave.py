@@ -1,39 +1,24 @@
 # coding:utf-8
-from threading import Thread
-from queue import Queue
-from enum import Enum, auto
-from time import sleep
-from typing import Callable, List, Any
-from HLModbusMaster import ModbusCheckCalc
+"""
+Modbus Slave ASCII
+"""
+from binascii import unhexlify
 
 
 class ModbusRegister:
-    def __init__(self,
-                 start: int = 0,
-                 length: int = 0,
-                 reg: List[int] = None,
-                 dev: Any = None,
-                 read: Callable[[List[int], Any], None] = None,
-                 write: Callable[[List[int], Any], None] = None):
+    def __init__(self, start, length, reg, dev, read=None, write=None):
         self.start, self.length = start, length
         self.reg, self.dev = reg, dev
         self.read, self.write = read, write
 
 
 class ModbusSlave:
-    def __init__(self, address: int, regs: List[ModbusRegister], sender: Callable[[bytes], None]):
+    def __init__(self, address, regs, sender):
         self.regs = regs
         self.address = address
         self.send = sender
 
-    @staticmethod
-    def frame_valid(data: bytes):
-        if len(data) < 4:
-            return False
-        check = (data[-2] << 8) + data[-1]
-        return check == ModbusCheckCalc(data, len(data) - 2)
-
-    def read_registers(self, addr: int, sz: int):
+    def read_registers(self, addr, sz):
         """
         0x03 function
         :return: True/False, Value
@@ -45,7 +30,7 @@ class ModbusSlave:
                     offset = addr - reg.start
                     return True, reg.reg[offset: offset + sz]
 
-    def write_register(self, addr: int, value: int):
+    def write_register(self, addr, value):
         """
         0x06 function
         :return: True/False, Value
@@ -57,7 +42,7 @@ class ModbusSlave:
                     reg.write(reg.reg, reg.dev)
                     return True, 0
 
-    def write_registers(self, addr: int, sz: int, data: bytes):
+    def write_registers(self, addr, sz, data):
         """
         0x10 function
         the [addr, addr+sz) should in the range of a ModbusRegister
@@ -71,53 +56,59 @@ class ModbusSlave:
                     return True, 0
 
     def deal(self, data: bytes):
+        """
+
+        :param data: string in bytes
+        :return: True/False, Value
+        """
         if data[0] != 0x00 and data[0] != self.address:
             return False
         if data[1] == 0x03:
-            self.read_registers(data[2] * 256 + data[3], data[4] * 256 + data[5])
+            return self.read_registers(data[2] * 256 + data[3], data[4] * 256 + data[5])
+        elif data[1] == 0x06:
+            return self.write_register(data[2] * 256 + data[3], data[4] * 256 + data[5])
+        elif data[1] == 0x10:
+            return self.write_registers(data[2] * 256 + data[3], data[4] * 256 + data[5], data[6:])
 
-    def receive(self, data: bytes):
+    def receive(self, data):
         """
+        modbus rtu protocal
         call this while received data
         :param data: bytes
         """
-        pass
+        raise Exception("Not Implement")
 
-    def receive_ascii(self, data: str):
+    def receive_ascii(self, data):
         """
         modbus ascii protocol
+        :param data: string in ascii
         :return: True/False, Value
         """
         if not data.startswith(":") or not data.endswith("\r\n") or len(data) % 2 == 0:
-            return False
-        mdata = bytearray.fromhex(data[1:-2])
+            return False, 0
+        mdata = unhexlify(data[1:-2])
         if sum(mdata) % 0x100 != 0:
-            return False
-        self.deal(mdata[:-1])
-
-
-def rd(a, b):
-    print(f"read {a} {b}")
-
-
-def wt(a, b):
-    print(f"write {a} {b}")
-
-
-def s(n):
-    print(n)
-
-
-r = [1, 2, 3]
-d = [4, 5, 6]
+            return False, 1
+        return self.deal(mdata[:-1])
 
 
 def test():
+    def rd(a, b):
+        print(f"read {a} {b}")
+
+    def wt(a, b):
+        print(f"write {a} {b}")
+
+    def s(n):
+        print(n)
+
+    r = [1, 2, 3]
+    d = [4, 5, 6]
     regs = [ModbusRegister(0, 4, r, d, rd, wt)]
-    a = ModbusSlave(1, regs, s)
-    a.read_registers(1, 1)
-    a.write_registers(1, 2, [5, 6])
-    a.receive_ascii(":010300000001FB\r\n")
+    m = ModbusSlave(1, regs, s)
+    m.read_registers(1, 1)
+    m.write_registers(1, 2, [5, 6])
+    m.receive_ascii(":010300000001FB\r\n")
 
 
 if __name__ == '__main__':
